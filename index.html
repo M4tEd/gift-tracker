@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gift tracker</title>
+<link rel="icon" href="icon.svg">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f2; --card: #fff; --fg: #1d1d1f; --muted: #6b6b70; --border: #e3e1dc;
+    --accent: #c2410c; --soft: #f0eee9;
+    --like: #e7f3ea; --like-fg: #1f6b35; --dis: #fbe9e9; --dis-fg: #a12a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171a; --card: #212126; --fg: #ececf0; --muted: #9a9aa3; --border: #34343b;
+      --accent: #fb923c; --soft: #2a2a30;
+      --like: #1d3325; --like-fg: #8fd9a5; --dis: #3a2023; --dis-fg: #f2a0a0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  input, textarea, select, button { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+
+  header {
+    position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center;
+    padding: 12px 24px; background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  #status { margin-right: auto; font-size: 13px; color: var(--muted); }
+  #status.error { color: var(--dis-fg); font-weight: 600; }
+  .field, input[type=search] {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; min-width: 0;
+  }
+  .field:focus, input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #search { width: min(340px, 45vw); }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 6px 12px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.icon { border: none; background: none; padding: 2px 6px; color: var(--muted); }
+  button.icon:hover { color: var(--dis-fg); }
+  button.small { padding: 3px 9px; font-size: 13px; }
+  button.danger { color: var(--dis-fg); }
+
+  main { padding: 20px 24px 60px; max-width: 1200px; margin: 0 auto; }
+  .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; }
+  .upcoming { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 22px; }
+  .up { flex: 0 0 auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .up:hover { border-color: var(--accent); }
+  .up b { display: block; }
+  .days { color: var(--accent); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; cursor: pointer; }
+  .card:hover { border-color: var(--accent); }
+  .card h2 { font-size: 16px; margin: 0 0 2px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { background: var(--like); color: var(--like-fg); border-radius: 999px; padding: 2px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+  .chip.dis { background: var(--dis); color: var(--dis-fg); }
+  .chip button { border: none; background: none; padding: 0 0 0 2px; color: inherit; opacity: .6; line-height: 1; }
+  .chip button:hover { opacity: 1; }
+  .empty { color: var(--muted); text-align: center; padding: 60px 0; }
+
+  dialog {
+    width: min(860px, 96vw); max-height: 92vh; padding: 0; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--bg); color: var(--fg);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .d-head { position: sticky; top: 0; z-index: 2; display: flex; gap: 10px; align-items: center; padding: 14px 20px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .d-head .name { flex: 1; font-size: 20px; font-weight: 600; }
+  .d-body { padding: 8px 20px 24px; }
+  .d-body section { margin-top: 18px; }
+  .d-body h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 0 0 8px; }
+  .d-body h3 .hint { font-weight: normal; color: var(--muted); font-size: 12px; }
+  .d-body h3 button { margin-left: auto; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .chip-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip-box input { flex: 1; min-width: 120px; border: none; background: none; padding: 3px 4px; outline: none; }
+  .row { display: grid; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .row.dates { grid-template-columns: minmax(110px, 1fr) 150px 72px auto; }
+  .row.dates .meta { font-size: 12px; }
+  .row.sizes { grid-template-columns: 1fr 1fr auto; }
+  .row.ideas { grid-template-columns: 2fr 1.5fr 90px auto auto; }
+  .row.wishlist { grid-template-columns: 1fr 2fr 24px auto; }
+  .hist { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
+  .row.history { grid-template-columns: 2fr 150px 1fr 70px auto; }
+  .hist [data-f=comment] { width: 100%; }
+  .field.warn { border-color: var(--dis-fg); }
+  .price { position: relative; }
+  .price::before { content: "$"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .price input { width: 100%; padding-left: 20px; }
+  .open-link { text-decoration: none; text-align: center; }
+  .note-empty { color: var(--muted); font-size: 13px; margin: 2px 0 6px; }
+  textarea.field { width: 100%; min-height: 110px; resize: vertical; }
+  .d-foot { display: flex; justify-content: space-between; margin-top: 26px; }
+  @media (max-width: 640px) {
+    .two { grid-template-columns: 1fr; }
+    .row.ideas, .row.history { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎁 Gift tracker</h1>
+  <span id="status"></span>
+  <input id="search" type="search" placeholder="Search everything…  ( / )">
+  <button class="primary" id="add">+ Person</button>
+</header>
+<main>
+  <div id="upcoming-wrap"></div>
+  <div id="list"></div>
+</main>
+<dialog id="detail"></dialog>
+
+<script>
+const $ = (sel, el = document) => el.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : null;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const todayStr = () => new Date().toLocaleDateString("sv"); // YYYY-MM-DD in local time
+
+const ROW_LISTS = {
+  dates: () => ({ label: "", date: "" }),
+  sizes: () => ({ label: "", value: "" }),
+  ideas: () => ({ text: "", link: "", price: "" }),
+  history: () => ({ gift: "", date: todayStr(), occasion: "", reaction: "", comment: "" }),
+  wishlist: () => ({ label: "", url: "" }),
+};
+const REACTIONS = { "": "–", up: "👍", meh: "😐", down: "👎" };
+
+let data = { people: [] };
+let openId = null;
+const person = id => data.people.find(p => p.id === id);
+
+function newPerson() {
+  return { id: uid(), name: "", likes: [], dislikes: [], dates: [{ label: "Birthday", date: "" }],
+           sizes: [], ideas: [], history: [], wishlist: [], notes: "" };
+}
+
+function normalize(p) {
+  for (const k of ["likes", "dislikes", ...Object.keys(ROW_LISTS)]) if (!Array.isArray(p[k])) p[k] = [];
+  p.notes ??= ""; p.name ??= ""; p.id ??= uid();
+  return p;
+}
+
+function isBlank(p) {
+  return !p.name.trim() && !p.likes.length && !p.dislikes.length && !p.notes.trim() &&
+    !p.dates.some(d => d.date) && !p.sizes.length && !p.ideas.length && !p.history.length && !p.wishlist.length;
+}
+
+/* ---------- saving ---------- */
+
+let saveTimer = null;
+function setStatus(text, error = false) {
+  const el = $("#status");
+  el.textContent = text;
+  el.classList.toggle("error", error);
+}
+function save() {
+  clearTimeout(saveTimer);
+  setStatus("Saving…");
+  saveTimer = setTimeout(flush, 400);
+}
+async function flush() {
+  saveTimer = null;
+  try {
+    const r = await fetch("api/people", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!r.ok) throw new Error(r.status);
+    setStatus("Saved");
+  } catch {
+    setStatus("Not saved, is the server running? (run: gifts)", true);
+  }
+}
+addEventListener("pagehide", () => {
+  if (saveTimer) navigator.sendBeacon("api/people", new Blob([JSON.stringify(data)], { type: "application/json" }));
+});
+
+/* ---------- dates ---------- */
+
+function nextOccurrence(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || "");
+  if (!m) return null;
+  const [y, mo, d] = [+m[1], +m[2], +m[3]];
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let next = new Date(today.getFullYear(), mo - 1, d);
+  if (next < today) next = new Date(today.getFullYear() + 1, mo - 1, d);
+  return { days: Math.round((next - today) / 86400000), when: next, years: next.getFullYear() - y };
+}
+function daysText(n) { return n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`; }
+function fmtDay(d) { return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+
+function upcomingFor(p) {
+  return p.dates.map(d => ({ ...d, next: nextOccurrence(d.date) })).filter(d => d.next)
+    .sort((a, b) => a.next.days - b.next.days);
+}
+function eventLabel(d) {
+  const label = d.label || "Date";
+  if (d.next.years > 0 && /birth/i.test(label)) return `${label} (turns ${d.next.years})`;
+  if (d.next.years > 0 && /anniv/i.test(label)) return `${label} (${d.next.years} yrs)`;
+  return label;
+}
+
+/* ---------- list view ---------- */
+
+function matches(p, q) {
+  if (!q) return [];
+  const where = [];
+  const has = s => String(s ?? "").toLowerCase().includes(q);
+  if (has(p.name)) where.push("name");
+  if (p.likes.some(has)) where.push("likes");
+  if (p.dislikes.some(has)) where.push("dislikes");
+  if (p.ideas.some(i => has(i.text) || has(i.link))) where.push("ideas");
+  if (p.history.some(h => has(h.gift) || has(h.occasion) || has(h.comment))) where.push("history");
+  if (p.wishlist.some(w => has(w.label) || has(w.url))) where.push("wishlist");
+  if (p.sizes.some(s => has(s.label) || has(s.value))) where.push("sizes");
+  if (p.dates.some(d => has(d.label))) where.push("dates");
+  if (has(p.notes)) where.push("notes");
+  return where;
+}
+
+function renderList() {
+  const q = $("#search").value.trim().toLowerCase();
+  const people = [...data.people].sort((a, b) => (a.name || "~").localeCompare(b.name || "~"));
+
+  // Upcoming dates across everyone, next 60 days; hidden while searching.
+  const ups = q ? [] : data.people.flatMap(p => upcomingFor(p).filter(d => d.next.days <= 60).map(d => ({ p, d })))
+    .sort((a, b) => a.d.next.days - b.d.next.days);
+  $("#upcoming-wrap").innerHTML = ups.length ? `
+    <p class="section-title">Coming up (60 days)</p>
+    <div class="upcoming">${ups.map(({ p, d }) => `
+      <div class="up" data-open="${p.id}">
+        <b>${esc(p.name || "Unnamed")}</b>
+        <span class="meta">${esc(eventLabel(d))} · ${fmtDay(d.next.when)}</span><br>
+        <span class="days">${daysText(d.next.days)}</span>
+      </div>`).join("")}
+    </div>` : "";
+
+  const shown = q ? people.filter(p => matches(p, q).length) : people;
+  if (!data.people.length) {
+    $("#list").innerHTML = `<div class="empty">No one here yet. Click <b>+ Person</b> to add someone.</div>`;
+    return;
+  }
+  if (!shown.length) {
+    $("#list").innerHTML = `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
+    return;
+  }
+  $("#list").innerHTML = `<div class="grid">${shown.map(p => {
+    const next = upcomingFor(p)[0];
+    const where = matches(p, q).filter(w => w !== "name");
+    const given = p.history.length, ideas = p.ideas.length;
+    return `
+    <div class="card" data-open="${p.id}">
+      <h2>${esc(p.name || "Unnamed")}</h2>
+      <div class="meta">${next ? `${esc(eventLabel(next))} ${daysText(next.next.days)} · ${fmtDay(next.next.when)}` : "No dates"}</div>
+      ${p.likes.length || p.dislikes.length ? `<div class="chips">
+        ${p.likes.slice(0, 8).map(l => `<span class="chip">${esc(l)}</span>`).join("")}
+        ${p.likes.length > 8 ? `<span class="meta">+${p.likes.length - 8}</span>` : ""}
+        ${p.dislikes.slice(0, 4).map(l => `<span class="chip dis">✕ ${esc(l)}</span>`).join("")}
+        ${p.dislikes.length > 4 ? `<span class="meta">+${p.dislikes.length - 4}</span>` : ""}
+      </div>` : ""}
+      <div class="meta" style="margin-top:8px">${ideas} idea${ideas === 1 ? "" : "s"} · ${given} given${where.length ? ` · matched in ${where.join(", ")}` : ""}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+/* ---------- detail view ---------- */
+
+function chipBox(list, cls) {
+  const p = person(openId);
+  return `<div class="chip-box">
+    ${p[list].map((c, i) => `<span class="chip ${cls}">${esc(c)}<button title="Remove" data-act="del-chip" data-list="${list}" data-i="${i}">×</button></span>`).join("")}
+    <input data-chip="${list}" placeholder="Type, then Enter">
+  </div>`;
+}
+
+function rowInput(list, i, f, value, attrs = "") {
+  if (!/\bclass=/.test(attrs)) attrs = `class="field" ${attrs}`;
+  return `<input ${attrs} data-list="${list}" data-i="${i}" data-f="${f}" value="${esc(value)}">`;
+}
+const delBtn = (list, i) => `<button class="icon" title="Remove" data-act="del-row" data-list="${list}" data-i="${i}">✕</button>`;
+const addBtn = (list, label) => `<button class="small" data-act="add-row" data-list="${list}">+ ${label}</button>`;
+const linkBtn = u => safeUrl(u) ? `<a class="open-link" href="${esc(u)}" target="_blank" rel="noopener" title="Open link">↗</a>` : `<span></span>`;
+const emptyNote = (arr, text) => arr.length ? "" : `<p class="note-empty">${text}</p>`;
+
+function renderDetail(focusSel) {
+  const p = person(openId);
+  const dlg = $("#detail");
+  const scroll = dlg.scrollTop;
+  const pastGifts = new Set(p.history.map(h => h.gift.trim().toLowerCase()).filter(Boolean));
+
+  dlg.innerHTML = `
+  <div class="d-head">
+    <input class="field name" data-k="name" value="${esc(p.name)}" placeholder="Name">
+    <button data-act="close">Done</button>
+  </div>
+  <div class="d-body">
+    <div class="two">
+      <section>
+        <h3>💚 Likes / interests</h3>
+        ${chipBox("likes", "")}
+      </section>
+      <section>
+        <h3>🚫 Dislikes / avoid</h3>
+        ${chipBox("dislikes", "dis")}
+      </section>
+    </div>
+
+    <section>
+      <h3>💡 Gift ideas <span class="hint">price in CAD</span>${addBtn("ideas", "Idea")}</h3>
+      ${emptyNote(p.ideas, "No ideas yet.")}
+      ${p.ideas.map((it, i) => `
+        <div class="row ideas">
+          ${rowInput("ideas", i, "text", it.text, `placeholder="Idea"${pastGifts.has(it.text.trim().toLowerCase()) ? ` class="field warn" title="Already given before"` : ""}`)}
+          ${rowInput("ideas", i, "link", it.link, `placeholder="Link (optional)" type="url"`)}
+          <div class="price">${rowInput("ideas", i, "price", it.price, `placeholder="Price" type="number" min="0" step="any"`)}</div>
+          <button class="small" data-act="give" data-i="${i}" title="Mark as given: moves it to gift history">Given ✓</button>
+          ${delBtn("ideas", i)}
+        </div>`).join("")}
+    </section>
+
+    <section>
+      <h3>📜 Gift history ${addBtn("history", "Past gift")}</h3>
+      ${emptyNote(p.history, "Nothing given yet. Mark an idea as given, or add a past gift.")}
+      ${p.history.map((h, i) => `
+        <div class="hist">
+          <div class="row history">
+            ${rowInput("history", i, "gift", h.gift, `placeholder="Gift"`)}
+            ${rowInput("history", i, "date", h.date, `type="date"`)}
+            ${rowInput("history", i, "occasion", h.occasion, `placeholder="Occasion"`)}
+            <select class="field" data-list="history" data-i="${i}" data-f="reaction" title="How it landed">
+              ${Object.entries(REACTIONS).map(([v, l]) => `<option value="${v}"${h.reaction === v ? " selected" : ""}>${l}</option>`).join("")}
+            </select>
+            ${delBtn("history", i)}
+          </div>
+          ${rowInput("history", i, "comment", h.comment, `placeholder="How it landed / comments"`)}
+        </div>`).join("")}
+    </section>
+
+    <div class="two">
+      <section>
+        <h3>📅 Dates ${addBtn("dates", "Date")}</h3>
+        ${emptyNote(p.dates, "No dates.")}
+        ${p.dates.map((d, i) => {
+          const n = nextOccurrence(d.date);
+          return `<div class="row dates">
+            ${rowInput("dates", i, "label", d.label, `placeholder="Birthday, anniversary…"`)}
+            ${rowInput("dates", i, "date", d.date, `type="date"`)}
+            <span class="meta">${n ? daysText(n.days) : ""}</span>
+            ${delBtn("dates", i)}
+          </div>`;
+        }).join("")}
+      </section>
+      <section>
+        <h3>📏 Sizes ${addBtn("sizes", "Size")}</h3>
+        ${emptyNote(p.sizes, "No sizes.")}
+        ${p.sizes.map((s, i) => `
+          <div class="row sizes">
+            ${rowInput("sizes", i, "label", s.label, `placeholder="Shirt, shoe, ring…"`)}
+            ${rowInput("sizes", i, "value", s.value, `placeholder="Size"`)}
+            ${delBtn("sizes", i)}
+          </div>`).join("")}
+      </section>
+    </div>
+
+    <section>
+      <h3>🔗 Wishlist links ${addBtn("wishlist", "Link")}</h3>
+      ${emptyNote(p.wishlist, "No wishlist links.")}
+      ${p.wishlist.map((w, i) => `
+        <div class="row wishlist">
+          ${rowInput("wishlist", i, "label", w.label, `placeholder="Label"`)}
+          ${rowInput("wishlist", i, "url", w.url, `placeholder="https://…" type="url"`)}
+          <span class="link-slot">${linkBtn(w.url)}</span>
+          ${delBtn("wishlist", i)}
+        </div>`).join("")}
+    </section>
+
+    <section>
+      <h3>📝 Notes</h3>
+      <textarea class="field" data-k="notes" placeholder="Anything else worth remembering">${esc(p.notes)}</textarea>
+    </section>
+
+    <div class="d-foot">
+      <button class="danger" data-act="delete-person">Delete person</button>
+      <button data-act="close">Done</button>
+    </div>
+  </div>`;
+  dlg.scrollTop = scroll;
+  if (focusSel) $(focusSel, dlg)?.focus();
+}
+
+function openPerson(id, focusSel) {
+  openId = id;
+  renderDetail(focusSel);
+  const dlg = $("#detail");
+  if (!dlg.open) { dlg.showModal(); dlg.scrollTop = 0; }
+  if (focusSel) $(focusSel, dlg)?.focus();
+}
+
+function closePerson() {
+  const p = person(openId);
+  if (p && isBlank(p)) { data.people = data.people.filter(x => x !== p); save(); }
+  openId = null;
+  if ($("#detail").open) $("#detail").close();
+  renderList();
+}
+
+function addChips(list, input) {
+  const p = person(openId);
+  const vals = input.value.split(",").map(s => s.trim()).filter(Boolean);
+  input.value = "";
+  let added = false;
+  for (const v of vals) {
+    if (!p[list].some(x => x.toLowerCase() === v.toLowerCase())) { p[list].push(v); added = true; }
+  }
+  if (added) { save(); renderDetail(`[data-chip="${list}"]`); renderList(); }
+}
+
+/* ---------- events ---------- */
+
+const dlg = $("#detail");
+
+dlg.addEventListener("input", e => {
+  const t = e.target, p = person(openId);
+  if (!p) return;
+  if (t.dataset.k) p[t.dataset.k] = t.value;
+  else if (t.dataset.list && t.dataset.f) p[t.dataset.list][+t.dataset.i][t.dataset.f] = t.value;
+  else return;
+  save();
+  renderList();
+  // Update the bits next to the field in place; a full re-render here would steal focus and clicks.
+  const row = t.closest(".row"), key = `${t.dataset.list}.${t.dataset.f}`;
+  if (key === "dates.date") {
+    const n = nextOccurrence(t.value);
+    row.querySelector(".meta").textContent = n ? daysText(n.days) : "";
+  } else if (key === "wishlist.url") {
+    row.querySelector(".link-slot").innerHTML = linkBtn(t.value);
+  } else if (key === "ideas.text") {
+    const v = t.value.trim().toLowerCase();
+    const given = !!v && p.history.some(h => h.gift.trim().toLowerCase() === v);
+    t.classList.toggle("warn", given);
+    t.title = given ? "Already given before" : "";
+  }
+});
+
+dlg.addEventListener("keydown", e => {
+  const t = e.target;
+  if (t.dataset.chip) {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addChips(t.dataset.chip, t); }
+    else if (e.key === "Backspace" && !t.value) {
+      const p = person(openId);
+      if (p[t.dataset.chip].length) { p[t.dataset.chip].pop(); save(); renderDetail(`[data-chip="${t.dataset.chip}"]`); renderList(); }
+    }
+  }
+});
+dlg.addEventListener("focusout", e => {
+  if (e.target.dataset?.chip && e.target.value.trim()) addChips(e.target.dataset.chip, e.target);
+});
+
+dlg.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b) { if (e.target === dlg) closePerson(); return; } // click on backdrop
+  const p = person(openId), list = b.dataset.list, i = +b.dataset.i;
+  switch (b.dataset.act) {
+    case "close": return closePerson();
+    case "add-row": {
+      const row = ROW_LISTS[list]();
+      if (list === "history") p.history.unshift(row); else p[list].push(row);
+      save();
+      const idx = list === "history" ? 0 : p[list].length - 1;
+      return renderDetail(`[data-list="${list}"][data-i="${idx}"]`);
+    }
+    case "del-row":
+    case "del-chip":
+      p[list].splice(i, 1);
+      save(); renderDetail(); return renderList();
+    case "give": {
+      const it = p.ideas.splice(i, 1)[0];
+      const extra = [it.price && `$${it.price}`, it.link].filter(Boolean).join(" · ");
+      p.history.unshift({ gift: it.text, date: todayStr(), occasion: "", reaction: "", comment: extra });
+      save(); renderDetail(`[data-list="history"][data-i="0"][data-f="occasion"]`); return renderList();
+    }
+    case "delete-person":
+      if (!confirm(`Delete ${p.name || "this person"} and everything about them?`)) return;
+      data.people = data.people.filter(x => x !== p);
+      save(); openId = null; dlg.close(); return renderList();
+  }
+});
+dlg.addEventListener("cancel", e => { e.preventDefault(); closePerson(); }); // Esc
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-open]");
+  if (el && !dlg.contains(el)) openPerson(el.dataset.open);
+});
+$("#add").addEventListener("click", () => {
+  const p = newPerson();
+  data.people.push(p);
+  openPerson(p.id, '[data-k="name"]');
+});
+$("#search").addEventListener("input", renderList);
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && !dlg.open && document.activeElement !== $("#search")) { e.preventDefault(); $("#search").focus(); }
+});
+
+(async () => {
+  try {
+    const r = await fetch("api/people");
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+    data.people = (data.people || []).map(normalize);
+    setStatus("");
+  } catch {
+    setStatus("Couldn't load data, is the server running? (run: gifts)", true);
+  }
+  renderList();
+})();
+</script>
+</body>
+</html>

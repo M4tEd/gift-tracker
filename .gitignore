@@ -1,0 +1,4 @@
+# Personal data stays local
+people.json
+people.json.tmp
+backups/
